@@ -1,22 +1,21 @@
-FROM ubuntu:22.04
+FROM alpine:3.19
 
-RUN apt update && apt install -y \
-curl \
-socat \
-openssl \
-cron \
-git
-
-RUN git clone https://github.com/acmesh-official/acme.sh /root/acme.sh
-
-RUN /root/acme.sh/acme.sh --install
-
-ENV PATH="/root/.acme.sh:${PATH}"
+# Install required tools
+RUN apk add --no-cache \
+    bash \
+    curl \
+    socat \
+    openssl
 
 WORKDIR /app
 
-COPY start.sh /app/start.sh
+# Copy all project scripts
+COPY install.sh  /app/install.sh
+COPY start.sh    /app/start.sh
+COPY issue-cert.sh /app/issue-cert.sh
+COPY renew.sh    /app/renew.sh
 
-RUN chmod +x /app/start.sh
+# Make scripts executable
+RUN chmod +x /app/install.sh /app/start.sh /app/issue-cert.sh /app/renew.sh
 
-CMD ["/app/start.sh"]
+CMD ["bash", "/app/start.sh"]
