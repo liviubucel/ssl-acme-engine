@@ -9,6 +9,10 @@ app.get("/", (req, res) => {
   res.send("ACME Engine API running");
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.post("/generate", (req, res) => {
   const { domain } = req.body;
 
