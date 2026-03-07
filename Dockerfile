@@ -14,6 +14,9 @@ RUN chmod +x /app/install.sh /app/start.sh /app/issue-cert.sh /app/renew.sh
 
 RUN npm install
 
+# install acme.sh
+RUN curl https://get.acme.sh | sh
+
 EXPOSE 8080
 
 CMD ["node", "server.js"]
