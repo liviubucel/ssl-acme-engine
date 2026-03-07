@@ -16,4 +16,4 @@ RUN npm install
 
 EXPOSE 8080
 
-CMD ["node", "-e", "console.log('Node is running'); setInterval(()=>{},1000)"]
+CMD ["node", "server.js"]
