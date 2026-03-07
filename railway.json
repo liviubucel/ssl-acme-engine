@@ -1,5 +1,5 @@
 {
   "deploy": {
-    "startCommand": "bash start.sh"
+    "startCommand": "npm install && npm start"
   }
 }
