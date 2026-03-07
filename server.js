@@ -16,12 +16,12 @@ app.post("/generate", (req, res) => {
     return res.status(400).json({ error: "Domain required" });
   }
 
-  return res.json({
+  res.json({
     message: "ACME engine received request",
     domain: domain
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`ACME Engine API running on port ${PORT}`);
 });
