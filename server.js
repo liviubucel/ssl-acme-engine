@@ -12,9 +12,13 @@ app.get("/", (req, res) => {
 })
 
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
+  res.status(200).json({ status: "ok" })
+})
 
+/*
+ STEP 1
+ Generate DNS challenge
+*/
 app.post("/generate", (req, res) => {
 
   const domain = req.body.domain
@@ -38,7 +42,43 @@ app.post("/generate", (req, res) => {
     }
 
     res.json({
-      message: "Certificate process started",
+      message: "DNS challenge generated",
+      domain: domain,
+      output: stdout
+    })
+
+  })
+
+})
+
+/*
+ STEP 2
+ Verify DNS and issue certificate
+*/
+app.post("/verify", (req, res) => {
+
+  const domain = req.body.domain
+
+  if (!domain) {
+    return res.status(400).json({
+      error: "Domain is required"
+    })
+  }
+
+  console.log("Verifying domain:", domain)
+
+  exec(`bash /app/renew.sh ${domain}`, (error, stdout, stderr) => {
+
+    if (error) {
+      console.error("Verify error:", stderr)
+
+      return res.status(500).json({
+        error: stderr
+      })
+    }
+
+    res.json({
+      message: "Certificate issued successfully",
       domain: domain,
       output: stdout
     })
