@@ -1,5 +1,6 @@
 const express = require("express")
 const { exec } = require("child_process")
+const fs = require("fs")
 
 const app = express()
 
@@ -7,10 +8,16 @@ app.use(express.json())
 
 const PORT = process.env.PORT || 8080
 
+/*
+ ROOT
+*/
 app.get("/", (req, res) => {
   res.send("ACME Engine API running")
 })
 
+/*
+ HEALTH CHECK
+*/
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" })
 })
@@ -34,7 +41,7 @@ app.post("/generate", (req, res) => {
   exec(`bash /app/issue-cert.sh ${domain}`, (error, stdout, stderr) => {
 
     if (error) {
-      console.error("Error:", stderr)
+      console.error("Generate error:", stderr)
 
       return res.status(500).json({
         error: stderr
@@ -83,6 +90,31 @@ app.post("/verify", (req, res) => {
       output: stdout
     })
 
+  })
+
+})
+
+/*
+ STEP 3
+ Download certificate
+*/
+app.get("/download/:domain", (req, res) => {
+
+  const domain = req.params.domain
+
+  const certPath = `/app/certs/${domain}.crt`
+  const keyPath = `/app/certs/${domain}.key`
+
+  if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
+    return res.status(404).json({
+      error: "Certificate not found"
+    })
+  }
+
+  res.json({
+    domain: domain,
+    certificate: certPath,
+    private_key: keyPath
   })
 
 })
