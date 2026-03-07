@@ -2,6 +2,32 @@ const express = require("express")
 const { exec } = require("child_process")
 const fs = require("fs")
 
+
+setInterval(() => {
+
+  const dir = "/app/certs"
+
+  fs.readdir(dir,(err,files)=>{
+
+    files.forEach(file=>{
+      const path = `${dir}/${file}`
+
+      const stat = fs.statSync(path)
+
+      const age = Date.now() - stat.mtimeMs
+
+      if(age > 3600000){
+        fs.unlinkSync(path)
+      }
+
+    })
+
+  })
+
+},600000)
+
+
+
 const archiver = require("archiver")
 const rateLimit = require("express-rate-limit")
 
