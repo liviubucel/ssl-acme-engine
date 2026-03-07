@@ -3,11 +3,24 @@ const { exec } = require("child_process")
 const fs = require("fs")
 
 const archiver = require("archiver")
-
+const rateLimit = require("express-rate-limit")
 
 const app = express()
 
 app.use(express.json())
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minute
+  max: 20, // max 20 requesturi
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "Too many requests, please try again later."
+  }
+})
+
+app.use(limiter)
+
 
 const PORT = process.env.PORT || 8080
 
