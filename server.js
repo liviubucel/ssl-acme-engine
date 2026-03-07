@@ -2,6 +2,9 @@ const express = require("express")
 const { exec } = require("child_process")
 const fs = require("fs")
 
+const archiver = require("archiver")
+
+
 const app = express()
 
 app.use(express.json())
@@ -96,7 +99,7 @@ app.post("/verify", (req, res) => {
 
 /*
  STEP 3
- Download certificate
+ Download certificate ZIP
 */
 app.get("/download/:domain", (req, res) => {
 
@@ -111,14 +114,15 @@ app.get("/download/:domain", (req, res) => {
     })
   }
 
-  res.json({
-    domain: domain,
-    certificate: certPath,
-    private_key: keyPath
-  })
+  res.attachment(`${domain}-ssl.zip`)
 
-})
+  const archive = archiver("zip")
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`ACME Engine API running on port ${PORT}`)
+  archive.pipe(res)
+
+  archive.file(certPath, { name: `${domain}.crt` })
+  archive.file(keyPath, { name: `${domain}.key` })
+
+  archive.finalize()
+
 })
