@@ -1,6 +1,6 @@
-FROM alpine:3.19
+FROM node:20-alpine
 
-# Install required tools
+# Install required tools for ACME
 RUN apk add --no-cache \
     bash \
     curl \
@@ -9,13 +9,15 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy all project scripts
-COPY install.sh  /app/install.sh
-COPY start.sh    /app/start.sh
-COPY issue-cert.sh /app/issue-cert.sh
-COPY renew.sh    /app/renew.sh
+# Copy project files
+COPY . .
 
 # Make scripts executable
 RUN chmod +x /app/install.sh /app/start.sh /app/issue-cert.sh /app/renew.sh
 
-CMD ["bash", "/app/start.sh"]
+# Install Node dependencies
+RUN npm install
+
+EXPOSE 8080
+
+CMD ["node", "server.js"]
