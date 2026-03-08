@@ -83,6 +83,18 @@ app.post("/generate", (req, res) => {
     })
   }
 
+  if (!/^[a-zA-Z0-9.-]+$/.test(domain)) {
+    return res.status(400).json({
+      error: "Invalid domain format"
+    })
+  }
+
+  if (!/^[a-zA-Z0-9._-]+$/.test(ca)) {
+    return res.status(400).json({
+      error: "Invalid CA format"
+    })
+  }
+
   console.log("Generating challenge for:", domain)
 
   exec(`bash /app/issue-cert.sh ${domain} ${ca}`, (error, stdout, stderr) => {
@@ -95,12 +107,31 @@ app.post("/generate", (req, res) => {
       })
     }
 
-    res.json({
-      message: "DNS challenge generated",
-      domain: domain,
-      ca: ca,
-      output: stdout
-    })
+    try {
+      const result = JSON.parse(stdout.trim())
+
+      if (result.error) {
+        return res.status(500).json({
+          error: result.error,
+          raw_output: result.raw_output
+        })
+      }
+
+      res.json({
+        message: "DNS challenge generated",
+        domain: result.domain,
+        ca: ca,
+        dns_record: result.dns_record,
+        txt_value: result.txt_value
+      })
+
+    } catch (e) {
+      console.error("Parse error:", e.message)
+      res.status(500).json({
+        error: "Failed to parse challenge output",
+        output: stdout
+      })
+    }
 
   })
 
@@ -117,6 +148,12 @@ app.post("/verify", (req, res) => {
   if (!domain) {
     return res.status(400).json({
       error: "Domain is required"
+    })
+  }
+
+  if (!/^[a-zA-Z0-9.-]+$/.test(domain)) {
+    return res.status(400).json({
+      error: "Invalid domain format"
     })
   }
 
@@ -149,6 +186,12 @@ Download certificate ZIP
 app.get("/download/:domain", (req, res) => {
 
   const domain = req.params.domain
+
+  if (!/^[a-zA-Z0-9.-]+$/.test(domain)) {
+    return res.status(400).json({
+      error: "Invalid domain format"
+    })
+  }
 
   const certPath = `/app/certs/${domain}.crt`
   const keyPath = `/app/certs/${domain}.key`
