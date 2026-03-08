@@ -6,7 +6,7 @@ DOMAIN=$1
 CA=$2
 
 if [ -z "$DOMAIN" ]; then
-  echo "Domain missing"
+  echo '{"error":"Domain missing"}'
   exit 1
 fi
 
@@ -20,16 +20,23 @@ echo "=== ACME SSL Engine ==="
 echo "Domain: $DOMAIN"
 echo "CA: $CA"
 
-# seteaza Certificate Authority
+# set CA
 acme.sh --set-default-ca --server $CA
 
-# genereaza challenge DNS
-acme.sh --issue \
+# run manual DNS challenge
+OUTPUT=$(acme.sh --issue \
+  -d "$DOMAIN" \
   --dns \
   --yes-I-know-dns-manual-mode-enough-go-ahead-please \
-  -d "$DOMAIN" \
-  --keylength ec-256
+  --keylength ec-256 2>&1 || true)
 
-echo ""
-echo "TXT record required:"
-echo "_acme-challenge.$DOMAIN"
+# extrage TXT record
+TXT_NAME="_acme-challenge.$DOMAIN"
+TXT_VALUE=$(echo "$OUTPUT" | grep "TXT value" | awk '{print $3}')
+
+# raspuns JSON pentru API
+echo "{"
+echo "\"domain\":\"$DOMAIN\","
+echo "\"dns_record\":\"$TXT_NAME\","
+echo "\"txt_value\":\"$TXT_VALUE\""
+echo "}"
