@@ -16,15 +16,29 @@ fi
 
 export PATH="$HOME/.acme.sh:$PATH"
 
-echo "Generating DNS challenge for $DOMAIN"
-
-# setează CA
+# set CA
 acme.sh --set-default-ca --server $CA
 
-# rulează manual DNS challenge
+# run manual DNS challenge
 OUTPUT=$(acme.sh --issue \
-  --manual \
   -d "$DOMAIN" \
+  --dns \
+  --yes-I-know-dns-manual-mode-enough-go-ahead-please \
   --keylength ec-256 2>&1 || true)
 
-echo "$OUTPUT"
+# extract TXT record
+TXT_NAME="_acme-challenge.$DOMAIN"
+TXT_VALUE=$(echo "$OUTPUT" | grep "TXT value" | grep -o "'[^']*'" | tr -d "'" | head -1)
+
+# fallback: try without quotes
+if [ -z "$TXT_VALUE" ]; then
+  TXT_VALUE=$(echo "$OUTPUT" | grep "TXT value" | sed 's/.*TXT value:[[:space:]]*//' | tr -d "'" | head -1)
+fi
+
+if [ -z "$TXT_VALUE" ]; then
+  echo "{\"error\":\"Failed to extract DNS challenge value\",\"raw_output\":\"$(echo "$OUTPUT" | tail -5 | tr '\n' ' ')\"}"
+  exit 1
+fi
+
+# JSON response for API
+echo "{\"domain\":\"$DOMAIN\",\"dns_record\":\"$TXT_NAME\",\"txt_value\":\"$TXT_VALUE\"}"
