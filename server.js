@@ -1,5 +1,5 @@
 const express = require("express")
-const { exec } = require("child_process")
+const { execFile } = require("child_process")
 const fs = require("fs")
 const archiver = require("archiver")
 const rateLimit = require("express-rate-limit")
@@ -97,7 +97,7 @@ app.post("/generate", (req, res) => {
 
   console.log("Generating challenge for:", domain)
 
-  exec(`bash /app/issue-cert.sh ${domain} ${ca}`, (error, stdout, stderr) => {
+  execFile("bash", ["/app/issue-cert.sh", domain, ca], (error, stdout, stderr) => {
 
     if (error) {
       console.error("Generate error:", stderr)
@@ -159,7 +159,7 @@ app.post("/verify", (req, res) => {
 
   console.log("Verifying domain:", domain)
 
-  exec(`bash /app/renew.sh ${domain}`, (error, stdout, stderr) => {
+  execFile("bash", ["/app/renew.sh", domain], (error, stdout, stderr) => {
 
     if (error) {
       console.error("Verify error:", stderr)

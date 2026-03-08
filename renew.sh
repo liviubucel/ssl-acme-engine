@@ -18,7 +18,7 @@ fi
 
 export PATH="$HOME/.acme.sh:$PATH"
 
-# verifică DNS și emite certificatul
+# verify DNS and issue certificate
 OUTPUT=$(acme.sh --renew \
   -d "$DOMAIN" \
   --yes-I-know-dns-manual-mode-enough-go-ahead-please \
