@@ -1,17 +1,45 @@
 const express = require("express")
 const { exec } = require("child_process")
 const fs = require("fs")
+const archiver = require("archiver")
+const rateLimit = require("express-rate-limit")
 
+const app = express()
+app.use(express.json())
 
+/*
+Rate limit protection
+*/
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "Too many requests, please try again later."
+  }
+})
+
+app.use(limiter)
+
+const PORT = process.env.PORT || 8080
+
+/*
+Cleanup old certificates
+*/
 setInterval(() => {
 
   const dir = "/app/certs"
 
+  if (!fs.existsSync(dir)) return
+
   fs.readdir(dir,(err,files)=>{
 
-    files.forEach(file=>{
-      const path = `${dir}/${file}`
+    if (err) return
 
+    files.forEach(file=>{
+
+      const path = `${dir}/${file}`
       const stat = fs.statSync(path)
 
       const age = Date.now() - stat.mtimeMs
@@ -26,51 +54,28 @@ setInterval(() => {
 
 },600000)
 
-
-
-const archiver = require("archiver")
-const rateLimit = require("express-rate-limit")
-
-const app = express()
-
-app.use(express.json())
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minute
-  max: 20, // max 20 requesturi
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: "Too many requests, please try again later."
-  }
-})
-
-app.use(limiter)
-
-
-const PORT = process.env.PORT || 8080
-
 /*
- ROOT
+ROOT
 */
 app.get("/", (req, res) => {
   res.send("ACME Engine API running")
 })
 
 /*
- HEALTH CHECK
+HEALTH CHECK (important for Railway)
 */
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" })
 })
 
 /*
- STEP 1
- Generate DNS challenge
+STEP 1
+Generate DNS challenge
 */
 app.post("/generate", (req, res) => {
 
   const domain = req.body.domain
+  const ca = req.body.ca || "letsencrypt"
 
   if (!domain) {
     return res.status(400).json({
@@ -78,9 +83,9 @@ app.post("/generate", (req, res) => {
     })
   }
 
-  console.log("Request received for domain:", domain)
+  console.log("Generating challenge for:", domain)
 
-  exec(`bash /app/issue-cert.sh ${domain}`, (error, stdout, stderr) => {
+  exec(`bash /app/issue-cert.sh ${domain} ${ca}`, (error, stdout, stderr) => {
 
     if (error) {
       console.error("Generate error:", stderr)
@@ -93,6 +98,7 @@ app.post("/generate", (req, res) => {
     res.json({
       message: "DNS challenge generated",
       domain: domain,
+      ca: ca,
       output: stdout
     })
 
@@ -101,8 +107,8 @@ app.post("/generate", (req, res) => {
 })
 
 /*
- STEP 2
- Verify DNS and issue certificate
+STEP 2
+Verify DNS and issue certificate
 */
 app.post("/verify", (req, res) => {
 
@@ -137,8 +143,8 @@ app.post("/verify", (req, res) => {
 })
 
 /*
- STEP 3
- Download certificate ZIP
+STEP 3
+Download certificate ZIP
 */
 app.get("/download/:domain", (req, res) => {
 
@@ -164,4 +170,11 @@ app.get("/download/:domain", (req, res) => {
 
   archive.finalize()
 
+})
+
+/*
+START SERVER
+*/
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`ACME Engine API running on port ${PORT}`)
 })
