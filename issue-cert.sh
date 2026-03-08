@@ -16,27 +16,15 @@ fi
 
 export PATH="$HOME/.acme.sh:$PATH"
 
-echo "=== ACME SSL Engine ==="
-echo "Domain: $DOMAIN"
-echo "CA: $CA"
+echo "Generating DNS challenge for $DOMAIN"
 
-# set CA
+# setează CA
 acme.sh --set-default-ca --server $CA
 
-# run manual DNS challenge
+# rulează manual DNS challenge
 OUTPUT=$(acme.sh --issue \
+  --manual \
   -d "$DOMAIN" \
-  --dns \
-  --yes-I-know-dns-manual-mode-enough-go-ahead-please \
   --keylength ec-256 2>&1 || true)
 
-# extrage TXT record
-TXT_NAME="_acme-challenge.$DOMAIN"
-TXT_VALUE=$(echo "$OUTPUT" | grep "TXT value" | awk '{print $3}')
-
-# raspuns JSON pentru API
-echo "{"
-echo "\"domain\":\"$DOMAIN\","
-echo "\"dns_record\":\"$TXT_NAME\","
-echo "\"txt_value\":\"$TXT_VALUE\""
-echo "}"
+echo "$OUTPUT"
