@@ -24,6 +24,17 @@ app.use(limiter)
 
 const PORT = process.env.PORT || 8080
 
+// ENGINE_TOKEN — shared secret between Cloudflare Worker and this service.
+// Set as a Railway environment variable and as a Cloudflare Worker secret.
+const ENGINE_TOKEN = process.env.ENGINE_TOKEN
+
+// Only ACME CA hosts are allowed through the proxy.
+const ALLOWED_ACME_HOSTS = [
+  "acme-v02.api.letsencrypt.org",
+  "acme-staging-v02.api.letsencrypt.org",
+  "acme.zerossl.com",
+]
+
 /*
 Cleanup old certificates
 */
@@ -66,6 +77,78 @@ HEALTH CHECK (important for Railway)
 */
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" })
+})
+
+/*
+ACME PROXY — relay ACME protocol requests from the Cloudflare Worker to the
+real CA (Let's Encrypt / ZeroSSL). The Worker cannot reach LE directly due to
+Cloudflare-edge TLS issues (HTTP 525/502); this service has no such restriction.
+
+Authentication: Bearer token via Authorization header (ENGINE_TOKEN secret).
+Allowed targets: ACME CA hosts only (whitelist enforced).
+*/
+app.post("/api/acme-proxy", async (req, res) => {
+
+  // Token auth — skip check if ENGINE_TOKEN not configured (dev mode)
+  if (ENGINE_TOKEN) {
+    const authHeader = req.headers["authorization"] || ""
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : ""
+    if (token !== ENGINE_TOKEN) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+  }
+
+  const { url, method = "GET", headers = {}, body } = req.body
+
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "url is required" })
+  }
+
+  // Validate target host
+  let parsedUrl
+  try {
+    parsedUrl = new URL(url)
+  } catch {
+    return res.status(400).json({ error: "Invalid URL" })
+  }
+
+  if (!ALLOWED_ACME_HOSTS.includes(parsedUrl.hostname)) {
+    return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
+  }
+
+  try {
+    const fetchOptions = {
+      method: method.toUpperCase(),
+      headers: headers,
+      redirect: "follow",
+    }
+
+    if (body && !["GET", "HEAD"].includes(fetchOptions.method)) {
+      fetchOptions.body = body
+    }
+
+    const upstream = await fetch(url, fetchOptions)
+
+    // Forward ACME-relevant response headers
+    const forwardHeaders = {}
+    for (const h of ["content-type", "replay-nonce", "location", "link"]) {
+      const v = upstream.headers.get(h)
+      if (v) forwardHeaders[h] = v
+    }
+
+    const responseBody = await upstream.arrayBuffer()
+
+    res.status(upstream.status)
+    for (const [k, v] of Object.entries(forwardHeaders)) {
+      res.setHeader(k, v)
+    }
+    res.end(Buffer.from(responseBody))
+
+  } catch (err) {
+    console.error("ACME proxy error:", err.message)
+    res.status(502).json({ error: "Upstream ACME request failed: " + err.message })
+  }
+
 })
 
 /*
