@@ -35,6 +35,7 @@ const ALLOWED_ACME_HOSTS = [
   "acme-staging-v02.api.letsencrypt.org",
   "acme.zerossl.com",
   "acme-api.actalis.com",
+  "https://acme-api.actalis.com/acme/directory",
   "acme-api.actalis.it",
   "dv.acme-v02.api.pki.goog",
   "acme.ssl.com",
