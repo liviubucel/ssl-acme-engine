@@ -16,15 +16,28 @@ fi
 
 export PATH="$HOME/.acme.sh:$PATH"
 
+
 # set CA
 acme.sh --set-default-ca --server $CA
+
+# Prepare EAB params if needed
+EAB_ARGS=""
+if [ "$CA" = "ssl.com" ]; then
+  if [ -n "$SSLCOM_EAB_KID" ] && [ -n "$SSLCOM_EAB_HMAC" ]; then
+    EAB_ARGS="--eab-kid $SSLCOM_EAB_KID --eab-hmac-key $SSLCOM_EAB_HMAC"
+  fi
+elif [ "$CA" = "google" ] || [ "$CA" = "googletrust" ] || [ "$CA" = "google-trust" ]; then
+  if [ -n "$GTS_EAB_KID" ] && [ -n "$GTS_EAB_HMAC" ]; then
+    EAB_ARGS="--eab-kid $GTS_EAB_KID --eab-hmac-key $GTS_EAB_HMAC"
+  fi
+fi
 
 # run manual DNS challenge
 OUTPUT=$(acme.sh --issue \
   -d "$DOMAIN" \
   --dns \
   --yes-I-know-dns-manual-mode-enough-go-ahead-please \
-  --keylength ec-256 2>&1 || true)
+  --keylength ec-256 $EAB_ARGS 2>&1 || true)
 
 # extract TXT record
 TXT_NAME="_acme-challenge.$DOMAIN"
