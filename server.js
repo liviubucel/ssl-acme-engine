@@ -122,6 +122,12 @@ app.post("/api/acme-proxy", async (req, res) => {
     return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
   }
 
+  if (parsedUrl.protocol !== "https:") {
+    return res.status(400).json({ error: "Only https URLs are allowed" })
+  }
+
+  const safeUrl = new URL(parsedUrl.pathname + parsedUrl.search, `https://${parsedUrl.hostname}`)
+
   try {
     const fetchOptions = {
       method: method.toUpperCase(),
@@ -133,7 +139,7 @@ app.post("/api/acme-proxy", async (req, res) => {
       fetchOptions.body = body
     }
 
-    const upstream = await fetch(url, fetchOptions)
+    const upstream = await fetch(safeUrl.toString(), fetchOptions)
 
     // Forward ACME-relevant response headers
     const forwardHeaders = {}
