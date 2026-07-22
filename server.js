@@ -30,16 +30,6 @@ const PORT = process.env.PORT || 8080
 const ENGINE_TOKEN = process.env.ENGINE_TOKEN
 
 // Only ACME CA hosts are allowed through the proxy.
-const ALLOWED_ACME_HOSTS = [
-  "acme-v02.api.letsencrypt.org",
-  "acme-staging-v02.api.letsencrypt.org",
-  "acme.zerossl.com",
-  "acme-api.actalis.com",
-  "https://acme-api.actalis.com/acme/directory",
-  "acme-api.actalis.it",
-  "dv.acme-v02.api.pki.goog",
-  "acme.ssl.com",
-]
 
 /*
 Cleanup old certificates
@@ -118,9 +108,31 @@ app.post("/api/acme-proxy", async (req, res) => {
     return res.status(400).json({ error: "Invalid URL" })
   }
 
-  const safeHost = ALLOWED_ACME_HOSTS.find((host) => host === parsedUrl.hostname)
-  if (!safeHost) {
-    return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
+  let safeHost
+  switch (parsedUrl.hostname) {
+    case "acme-v02.api.letsencrypt.org":
+      safeHost = "acme-v02.api.letsencrypt.org"
+      break
+    case "acme-staging-v02.api.letsencrypt.org":
+      safeHost = "acme-staging-v02.api.letsencrypt.org"
+      break
+    case "acme.zerossl.com":
+      safeHost = "acme.zerossl.com"
+      break
+    case "acme-api.actalis.com":
+      safeHost = "acme-api.actalis.com"
+      break
+    case "acme-api.actalis.it":
+      safeHost = "acme-api.actalis.it"
+      break
+    case "dv.acme-v02.api.pki.goog":
+      safeHost = "dv.acme-v02.api.pki.goog"
+      break
+    case "acme.ssl.com":
+      safeHost = "acme.ssl.com"
+      break
+    default:
+      return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
   }
 
   if (parsedUrl.protocol !== "https:") {
