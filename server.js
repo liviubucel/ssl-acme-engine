@@ -1,6 +1,7 @@
 const express = require("express")
 const { execFile } = require("child_process")
 const fs = require("fs")
+const https = require("https")
 const archiver = require("archiver")
 const rateLimit = require("express-rate-limit")
 
@@ -30,16 +31,6 @@ const PORT = process.env.PORT || 8080
 const ENGINE_TOKEN = process.env.ENGINE_TOKEN
 
 // Only ACME CA hosts are allowed through the proxy.
-const ALLOWED_ACME_HOSTS = [
-  "acme-v02.api.letsencrypt.org",
-  "acme-staging-v02.api.letsencrypt.org",
-  "acme.zerossl.com",
-  "acme-api.actalis.com",
-  "https://acme-api.actalis.com/acme/directory",
-  "acme-api.actalis.it",
-  "dv.acme-v02.api.pki.goog",
-  "acme.ssl.com",
-]
 
 /*
 Cleanup old certificates
@@ -118,37 +109,89 @@ app.post("/api/acme-proxy", async (req, res) => {
     return res.status(400).json({ error: "Invalid URL" })
   }
 
-  if (!ALLOWED_ACME_HOSTS.includes(parsedUrl.hostname)) {
-    return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
+  let safeHost
+  switch (parsedUrl.hostname) {
+    case "acme-v02.api.letsencrypt.org":
+      safeHost = "acme-v02.api.letsencrypt.org"
+      break
+    case "acme-staging-v02.api.letsencrypt.org":
+      safeHost = "acme-staging-v02.api.letsencrypt.org"
+      break
+    case "acme.zerossl.com":
+      safeHost = "acme.zerossl.com"
+      break
+    case "acme-api.actalis.com":
+      safeHost = "acme-api.actalis.com"
+      break
+    case "acme-api.actalis.it":
+      safeHost = "acme-api.actalis.it"
+      break
+    case "dv.acme-v02.api.pki.goog":
+      safeHost = "dv.acme-v02.api.pki.goog"
+      break
+    case "acme.ssl.com":
+      safeHost = "acme.ssl.com"
+      break
+    default:
+      return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    return res.status(400).json({ error: "Only https URLs are allowed" })
+  }
+
+  const safePath = parsedUrl.pathname + parsedUrl.search
+  if (!safePath.startsWith("/") || safePath.includes("..") || safePath.includes("\\")) {
+    return res.status(400).json({ error: "Invalid URL path" })
   }
 
   try {
     const fetchOptions = {
       method: method.toUpperCase(),
       headers: headers,
-      redirect: "follow",
     }
 
     if (body && !["GET", "HEAD"].includes(fetchOptions.method)) {
       fetchOptions.body = body
     }
 
-    const upstream = await fetch(url, fetchOptions)
+    const upstream = await new Promise((resolve, reject) => {
+      const request = https.request({
+        protocol: "https:",
+        hostname: safeHost,
+        path: safePath,
+        method: fetchOptions.method,
+        headers: fetchOptions.headers,
+      }, resolve)
+
+      request.on("error", reject)
+
+      if (fetchOptions.body) {
+        request.write(fetchOptions.body)
+      }
+
+      request.end()
+    })
 
     // Forward ACME-relevant response headers
     const forwardHeaders = {}
     for (const h of ["content-type", "replay-nonce", "location", "link"]) {
-      const v = upstream.headers.get(h)
+      const v = upstream.headers[h]
       if (v) forwardHeaders[h] = v
     }
 
-    const responseBody = await upstream.arrayBuffer()
+    const responseBody = await new Promise((resolve, reject) => {
+      const chunks = []
+      upstream.on("data", (chunk) => chunks.push(chunk))
+      upstream.on("end", () => resolve(Buffer.concat(chunks)))
+      upstream.on("error", reject)
+    })
 
-    res.status(upstream.status)
+    res.status(upstream.statusCode || 502)
     for (const [k, v] of Object.entries(forwardHeaders)) {
       res.setHeader(k, v)
     }
-    res.end(Buffer.from(responseBody))
+    res.end(responseBody)
 
   } catch (err) {
     console.error("ACME proxy error:", err.message)
