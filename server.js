@@ -1,6 +1,7 @@
 const express = require("express")
 const { execFile } = require("child_process")
 const fs = require("fs")
+const https = require("https")
 const archiver = require("archiver")
 const rateLimit = require("express-rate-limit")
 
@@ -139,35 +140,58 @@ app.post("/api/acme-proxy", async (req, res) => {
     return res.status(400).json({ error: "Only https URLs are allowed" })
   }
 
-  const safeUrl = new URL(parsedUrl.pathname + parsedUrl.search, `https://${safeHost}`)
+  const safePath = parsedUrl.pathname + parsedUrl.search
+  if (!safePath.startsWith("/") || safePath.includes("..") || safePath.includes("\\")) {
+    return res.status(400).json({ error: "Invalid URL path" })
+  }
 
   try {
     const fetchOptions = {
       method: method.toUpperCase(),
       headers: headers,
-      redirect: "follow",
     }
 
     if (body && !["GET", "HEAD"].includes(fetchOptions.method)) {
       fetchOptions.body = body
     }
 
-    const upstream = await fetch(safeUrl.toString(), fetchOptions)
+    const upstream = await new Promise((resolve, reject) => {
+      const request = https.request({
+        protocol: "https:",
+        hostname: safeHost,
+        path: safePath,
+        method: fetchOptions.method,
+        headers: fetchOptions.headers,
+      }, resolve)
+
+      request.on("error", reject)
+
+      if (fetchOptions.body) {
+        request.write(fetchOptions.body)
+      }
+
+      request.end()
+    })
 
     // Forward ACME-relevant response headers
     const forwardHeaders = {}
     for (const h of ["content-type", "replay-nonce", "location", "link"]) {
-      const v = upstream.headers.get(h)
+      const v = upstream.headers[h]
       if (v) forwardHeaders[h] = v
     }
 
-    const responseBody = await upstream.arrayBuffer()
+    const responseBody = await new Promise((resolve, reject) => {
+      const chunks = []
+      upstream.on("data", (chunk) => chunks.push(chunk))
+      upstream.on("end", () => resolve(Buffer.concat(chunks)))
+      upstream.on("error", reject)
+    })
 
-    res.status(upstream.status)
+    res.status(upstream.statusCode || 502)
     for (const [k, v] of Object.entries(forwardHeaders)) {
       res.setHeader(k, v)
     }
-    res.end(Buffer.from(responseBody))
+    res.end(responseBody)
 
   } catch (err) {
     console.error("ACME proxy error:", err.message)
