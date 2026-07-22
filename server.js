@@ -118,7 +118,8 @@ app.post("/api/acme-proxy", async (req, res) => {
     return res.status(400).json({ error: "Invalid URL" })
   }
 
-  if (!ALLOWED_ACME_HOSTS.includes(parsedUrl.hostname)) {
+  const safeHost = ALLOWED_ACME_HOSTS.find((host) => host === parsedUrl.hostname)
+  if (!safeHost) {
     return res.status(403).json({ error: "Forbidden host: " + parsedUrl.hostname })
   }
 
@@ -126,7 +127,7 @@ app.post("/api/acme-proxy", async (req, res) => {
     return res.status(400).json({ error: "Only https URLs are allowed" })
   }
 
-  const safeUrl = new URL(parsedUrl.pathname + parsedUrl.search, `https://${parsedUrl.hostname}`)
+  const safeUrl = new URL(parsedUrl.pathname + parsedUrl.search, `https://${safeHost}`)
 
   try {
     const fetchOptions = {
