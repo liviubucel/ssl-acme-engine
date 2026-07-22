@@ -1,6 +1,7 @@
 const express = require("express")
 const { execFile } = require("child_process")
 const fs = require("fs")
+const path = require("path")
 const archiver = require("archiver")
 const rateLimit = require("express-rate-limit")
 
@@ -275,6 +276,7 @@ Download certificate ZIP
 app.get("/download/:domain", (req, res) => {
 
   const domain = req.params.domain
+  const certsDir = "/app/certs"
 
   if (!/^[a-zA-Z0-9.-]+$/.test(domain)) {
     return res.status(400).json({
@@ -282,8 +284,14 @@ app.get("/download/:domain", (req, res) => {
     })
   }
 
-  const certPath = `/app/certs/${domain}.crt`
-  const keyPath = `/app/certs/${domain}.key`
+  const certPath = path.resolve(certsDir, `${domain}.crt`)
+  const keyPath = path.resolve(certsDir, `${domain}.key`)
+
+  if (!certPath.startsWith(`${certsDir}${path.sep}`) || !keyPath.startsWith(`${certsDir}${path.sep}`)) {
+    return res.status(400).json({
+      error: "Invalid domain format"
+    })
+  }
 
   if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
     return res.status(404).json({
